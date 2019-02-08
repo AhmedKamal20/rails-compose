@@ -1,0 +1,42 @@
+version: '2.0'
+
+services:
+
+  rails-api:
+    build: .
+    hostname: "rails-api"
+    container_name: "rails-api"
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./:/usr/src/app
+    depends_on:
+      - rails-db
+    ports:
+      - 3000:3000
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@rails-db:5432
+
+  rails-db:
+    image: postgres:9.4.10-alpine
+    hostname: "rails-db"
+    container_name: "rails-db"
+    restart: always
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+    volumes:
+      - rails-db-data:/var/lib/postgresql/data
+      - rails-db-logs:/var/log/postgresql
+
+  rails-adminer:
+    image: adminer
+    restart: always
+    hostname: "rails-adminer"
+    container_name: "rails-adminer"
+    ports:
+      - 8080:8080
+
+volumes:
+  rails-db-data:
+  rails-db-logs:
