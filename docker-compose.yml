@@ -18,7 +18,7 @@ services:
       DATABASE_URL: postgres://postgres:postgres@rails-db:5432
 
   rails-db:
-    image: postgres:9.4.10-alpine
+    image: postgres:9.4.21-alpine
     hostname: "rails-db"
     container_name: "rails-db"
     restart: always
