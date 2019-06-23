@@ -15,7 +15,10 @@ services:
     ports:
       - 3000:3000
     environment:
-      DATABASE_URL: postgres://postgres:postgres@rails-db:5432
+      PGHOST: "rails-db"
+      PGPORT: "5432"
+      PGUSER: "postgres"
+      PGPASSWORD: "postgres"
 
   rails-db:
     image: postgres:9.4.21-alpine

@@ -3,20 +3,32 @@
 * `docker-compose build`
 * `docker-compose run --rm rails-api rails new . --force --api --skip-bundle --database=postgresql`
 * `sudo chown -R akamal:akamal .`
+* `docker-compose build` Again, To Cache Gems.
+* Add the following to `config/database.yml`
+```ruby
+host: <%= ENV.fetch("PGHOST", "localhost") %>
+port: <%= ENV.fetch("PGPORT", 5432) %>
+username: <%= ENV.fetch("PGUSER", "postgres") %>
+password: <%= ENV.fetch("PGPASSWORD", "postgres") %>
+```
 * `docker-compose up -d`
+* Add one of those if you want Quick CSS style.
+
+`<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/yegor256/tacit@gh-pages/tacit-css.min.css"/>`
+
+`<link rel="stylesheet" href="https://cdn.rawgit.com/Chalarangelo/mini.css/v3.0.1/dist/mini-default.min.css">`
 
 ### If you have a database dump file
-* `docker-compose exec rails-api rails db:create`
 * `cat app_development.sql | docker exec -i rails-db psql -U postgres -d app_development`
-
-### If you want to start a fresh server
-* `docker-compose exec rails-api rails db:create db:migrate`
 
 ## Logs
 * `docker-compose logs -f`
 
 ## Backup database
 * `docker exec -t rails-db pg_dump -U postgres -d app_development > app_development_$(date +%d-%m-%Y"_"%H_%M_%S).sql`
+
+## to Migrate
+* `docker-compose exec rails-api rails db:migrate`
 
 ## Bundle Install
 * `docker-compose exec rails-api bundle install`
