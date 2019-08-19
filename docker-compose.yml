@@ -21,7 +21,7 @@ services:
       PGPASSWORD: "postgres"
 
   rails-db:
-    image: postgres:9.4.21-alpine
+    image: postgres:9.4.24-alpine
     hostname: "rails-db"
     container_name: "rails-db"
     restart: always

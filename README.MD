@@ -4,13 +4,6 @@
 * `docker-compose run --rm rails-api rails new . --force --api --skip-bundle --database=postgresql`
 * `sudo chown -R akamal:akamal .`
 * `docker-compose build` Again, To Cache Gems.
-* Add the following to `config/database.yml`
-```ruby
-host: <%= ENV.fetch("PGHOST", "localhost") %>
-port: <%= ENV.fetch("PGPORT", 5432) %>
-username: <%= ENV.fetch("PGUSER", "postgres") %>
-password: <%= ENV.fetch("PGPASSWORD", "postgres") %>
-```
 * `docker-compose up -d`
 * Add one of those if you want Quick CSS style.
 
