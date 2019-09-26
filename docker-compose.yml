@@ -33,7 +33,7 @@ services:
       - rails-db-logs:/var/log/postgresql
 
   rails-adminer:
-    image: adminer
+    image: adminer:latest
     restart: always
     hostname: "rails-adminer"
     container_name: "rails-adminer"
