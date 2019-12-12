@@ -59,8 +59,8 @@ else
 fi
 
 RubyVersion="2.6.5"
-RailsVersion="6.0.0"
-PostgresVersion="9.4.24"
+RailsVersion="6.0.1"
+PostgresVersion="9.4"
 
 echo -e "${GRE}\n\nCreating New Rails App as follow:${NCO}"
 echo -e "${BLU}AppName:${NCO} ${AppName}"
@@ -127,17 +127,17 @@ version: '2.0'
 
 services:
 
-  ${AppName}-rails:
+  rails:
     build: .
     image: "${AppName}-rails"
-    hostname: "${AppName}-rails"
+    hostname: "rails"
     container_name: "${AppName}-rails"
     tty: true
     stdin_open: true
     volumes:
       - ./:/usr/src/app
     depends_on:
-      - ${AppName}-db
+      - db
     ports:
       - ${RailsPort}:${RailsPort}$([[ $WebPackerEnabled = true ]] && echo -e "\n      - ${WebPackerPort}:${WebPackerPort}")
     environment:
@@ -145,14 +145,14 @@ services:
       NODE_ENV: "development"
       HOST: "localhost"
       PORT: "${RailsPort}"
-      PGHOST: "${AppName}-db"
+      PGHOST: "db"
       PGPORT: "5432"
       PGUSER: "postgres"
       PGPASSWORD: "postgres"
 
-  ${AppName}-db:
+  db:
     image: postgres:${PostgresVersion}-alpine
-    hostname: "${AppName}-db"
+    hostname: "db"
     container_name: "${AppName}-db"
     restart: always
     environment:
@@ -162,10 +162,10 @@ services:
       - ${AppName}-db-data:/var/lib/postgresql/data
       - ${AppName}-db-logs:/var/log/postgresql
 
-  ${AppName}-adminer:
+  adminer:
     image: adminer:latest
     restart: always
-    hostname: "${AppName}-adminer"
+    hostname: "adminer"
     container_name: "${AppName}-adminer"
     ports:
       - ${AdminerPort}:8080
@@ -235,7 +235,7 @@ if [[ $Testing == false ]]; then
   docker-compose build
 
   log "Initializing the Rails App"
-  docker-compose run --rm --no-deps --entrypoint "" ${AppName}-rails rails new . ${RailsOptions}
+  docker-compose run --rm --no-deps --entrypoint "" rails rails new . ${RailsOptions}
 
   log "Changing the Owner to Current User"
   sudo chown -R akamal:akamal .
