@@ -238,7 +238,7 @@ if [[ $Testing == false ]]; then
   docker-compose run --rm --no-deps --entrypoint "" rails rails new . ${RailsOptions}
 
   log "Changing the Owner to Current User"
-  sudo chown -R akamal:akamal .
+  sudo chown -R $USER:$(id -gn $USER) .
 
   log "Rebuilding the docker images"
   docker-compose build
@@ -258,7 +258,7 @@ if [[ $Testing == false ]]; then
   done
 
   log "Changing the Owner to Current User"
-  sudo chown -R akamal:akamal .
+  sudo chown -R $USER:$(id -gn $USER) .
 
   log "Creating an Initial commit"
   git add .

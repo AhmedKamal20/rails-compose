@@ -1,6 +1,6 @@
 ## Usage
 * `RailsC.sh PATH PORT_PREFIX RAILS_OPTIONS`
-* `RailsC.sh ~/path/to/app 30 "--database=postgresql"`
+* `RailsC.sh ~/path/to/app 30 "--force --database=postgresql"`
 
 ## Logs
 * `docker-compose logs -f`
