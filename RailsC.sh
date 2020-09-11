@@ -1,84 +1,92 @@
 #!/bin/bash
 
-###################################################################
+############################################################################
 # Script Name  : RailsC
 # Description  : A CLI tool to help you start a new rails app fast
 # Version      : 1.0.0
 # Author       : AhmedKamal20
 # Email        : ahmed.kamal200@gmail.com
-###################################################################
+# Dependencies : docker-compose readlink basename pushd popd read sudo sleep
+############################################################################
 
 set -e
 sudo -v
 
+TESTING=false
+
 RED='\e[1;31m'; GRE='\e[1;32m'; BLU='\e[1;34m'; YEL='\e[1;33m'; NCO='\e[0m';
 
-function help {
+if [ $# -lt 2 ]; then
   echo -e "\n${RED}No/Wrong arguments supplied${NCO}\n"
   echo -e "${YEL}RailsC${NCO} - A CLI tool to help you start a new rails app fast\n"
   echo -e "${GRE}Format:${NCO} RailsC [PATH] [PORT PREFIX] [RAILS OPTIONS]\n"
   echo -e "${BLU}PATH:${NCO} Include The Repo Folder Name, Default is Current Folder"
   echo -e "${BLU}PORT PREFIX:${NCO} 30 OR 60, UsedAs 3030,3080 for Services, Default is 30"
-  echo -e "${BLU}RAILS OPTIONS:${NCO} Option to use for Rails new Apps, Default is \"--skip-bundle --database=postgresql\"\n"
-  echo -e "${YEL}e.g.${NCO} RailsC ~/apps/myApp 30 \"--force --skip-bundle --database=postgresql\"\n"
-}
+  echo -e "${BLU}RAILS OPTIONS:${NCO} Option to use for Rails new Apps, Default is \"${DefaultOptions}\"\n"
+  echo -e "${YEL}e.g.${NCO} RailsC ~/apps/myApp 30 \"--force --database=postgresql\"\n"
 
-function log {
-  echo -e "${GRE}✔${NCO} $1"
-}
-
-function overwrite_railsc {
-  pushd "${RepoPath}"
-  docker-compose down -v
-  popd
-  read -p "Are you sure you want to remove ${RepoPath}?" yn
-  case $yn in
-    [Yy]* ) echo "sudo rm -rf ${RepoPath}"; sudo rm -rf "${RepoPath}";;
-    [Nn]* ) exit;;
-    * ) echo "Please answer yes or no."; exit;;
-  esac
-}
-
-if [ $# -lt 2 ]; then
-  help
   exit 1
 fi
 
-Testing=false
+RubyVersion="2.7.1"
+RailsVersion="6.0.3.3"
+PostgresVersion="12.4"
+DefaultOptions="--database=postgresql"
+
 RepoPath=$(readlink -f "${1}")
 AppName=$(basename "${RepoPath}")
 AppName=$(echo ${AppName// /-} | tr '[:upper:]' '[:lower:]')
 RailsPort="${2}30"
 WebPackerPort="${2}35"
 AdminerPort="${2}80"
-RailsOptions="${3}"
-if [[ ${3} == *api* ]]; then
+MailCatcherPort="${2}90"
+if [ -z "${3}" ]; then
+  RailsOptions="${DefaultOptions}"
+else
+  RailsOptions="${3}"
+fi
+
+if [[ ${RailsOptions} == *api* ]]; then
   WebPackerEnabled=false
 else
   WebPackerEnabled=true
 fi
 
-RubyVersion="2.6.5"
-RailsVersion="6.0.1"
-PostgresVersion="9.4"
+function log {
+  echo -e "${GRE}✔${NCO} $1"
+}
 
 echo -e "${GRE}\n\nCreating New Rails App as follow:${NCO}"
 echo -e "${BLU}AppName:${NCO} ${AppName}"
 echo -e "${BLU}RepoPath:${NCO} ${RepoPath}"
 echo -e "${BLU}RailsPort:${NCO} ${RailsPort}"
 echo -e "${BLU}AdminerPort:${NCO} ${AdminerPort}"
+echo -e "${BLU}MailCatcherPort:${NCO} ${MailCatcherPort}"
 echo -e "${BLU}RailsOptions:${NCO} ${RailsOptions}"
 echo -e "${BLU}RubyVersion:${NCO} ${RubyVersion}"
 echo -e "${BLU}RailsVersion:${NCO} ${RailsVersion}"
 echo -e "${BLU}PostgresVersion:${NCO} ${PostgresVersion}"
 echo -e "${RED}Starting...${NCO}"
 
-if [[ -d ${RepoPath} && $Testing == false ]]; then
-  read -p "The Path is Existed Already, Do you wish to overwrite it?" yn
+
+function overwrite_railsc {
+  pushd "${RepoPath}"
+  docker-compose down -v
+  popd
+  read -p "Are you sure you want to remove ${RepoPath}? [YyNn] " yn
+  case $yn in
+    [Yy]* ) echo "sudo rm -rf ${RepoPath}"; sudo rm -rf "${RepoPath}";;
+    [Nn]* ) exit;;
+    * ) echo "Please answer [YyNn]"; exit;;
+  esac
+}
+
+if [[ -d ${RepoPath} && $TESTING == false ]]; then
+  read -p "The Path is Existed Already, Do you wish to overwrite it? [YyNn] " yn
   case $yn in
     [Yy]* ) overwrite_railsc;;
     [Nn]* ) exit;;
-    * ) echo "Please answer yes or no."; exit;;
+    * ) echo "Please answer [YyNn]"; exit;;
   esac
 fi
 
@@ -92,11 +100,12 @@ FROM ruby:${RubyVersion}
 
 ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=DontWarn
 
-RUN curl -sL https://deb.nodesource.com/setup_8.x | bash -
+RUN curl -sL https://deb.nodesource.com/setup_12.x | bash -
 RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \\
     && echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
 RUN apt-get update -qq \\
     && apt-get install -y --no-install-recommends \\
+    libpq-dev \\
     postgresql-client \\
     nodejs \\
     yarn
@@ -109,6 +118,8 @@ $([[ $WebPackerEnabled = true ]] && echo "COPY package.json /usr/src/app/package
 $([[ $WebPackerEnabled = true ]] && echo "COPY yarn.lock /usr/src/app/yarn.lock")
 
 RUN bundle install
+# RUN gem install rails -v $RailsVersion
+
 $([[ $WebPackerEnabled = true ]] && echo "RUN yarn install")
 
 COPY entrypoint.sh /usr/bin/
@@ -136,6 +147,7 @@ services:
     stdin_open: true
     volumes:
       - ./:/usr/src/app
+      - ${AppName}-rails-bundler-dir:/usr/local/bundle
     depends_on:
       - db
     ports:
@@ -162,6 +174,15 @@ services:
       - ${AppName}-db-data:/var/lib/postgresql/data
       - ${AppName}-db-logs:/var/log/postgresql
 
+  mailcatcher:
+    image: schickling/mailcatcher
+    hostname: "mailcatcher"
+    container_name: "${AppName}-mailcatcher"
+    depends_on:
+      - rails
+    ports:
+      - ${MailCatcherPort}:1080
+
   adminer:
     image: adminer:latest
     restart: always
@@ -173,6 +194,7 @@ services:
 volumes:
   ${AppName}-db-data:
   ${AppName}-db-logs:
+  ${AppName}-rails-bundler-dir:
 ENDOFFILE
 log "DockerCompose file Created"
 
@@ -184,7 +206,8 @@ set -e
 rm -f tmp/pids/server.pid
 
 echo -e "Installing Ruby Dependencies"
-bundle install
+bundle check || bundle install
+
 $([[ $WebPackerEnabled = true ]] && echo "
 if [[ -d 'config/webpack' ]]; then
   echo 'Installing JS Dependencies'
@@ -216,7 +239,7 @@ log "Gemfile Created"
 cat > ./package.json << ENDOFFILE
 {
   "name": "${AppName}",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true
 }
 ENDOFFILE
@@ -230,18 +253,19 @@ log "Yarn Lock Created"
 
 # Start Building the Project
 
-if [[ $Testing == false ]]; then
+if [[ $TESTING == false ]]; then
   log "Building the docker images"
   docker-compose build
 
   log "Initializing the Rails App"
+  log "rails new . ${RailsOptions}"
   docker-compose run --rm --no-deps --entrypoint "" rails rails new . ${RailsOptions}
 
   log "Changing the Owner to Current User"
   sudo chown -R $USER:$(id -gn $USER) .
 
-  log "Rebuilding the docker images"
-  docker-compose build
+  # log "Rebuilding the docker images"
+  # docker-compose build
 
   log "Starting the docker services"
   docker-compose up -d
@@ -265,7 +289,25 @@ if [[ $Testing == false ]]; then
   git commit -m "Initial commit"
 fi
 
+echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "${RED}Done${NCO}"
+echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "Rails App Installed In ${RepoPath}"
 echo -e "Rails App Runs at http://localhost:${RailsPort}/"
 echo -e "Adminer Runs at http://localhost:${AdminerPort}/"
+echo -e "MailCatcher Runs at http://localhost:${MailCatcherPort}/"
+echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
+echo -e "Change the webpacker port in config/webpacker.yml to ${WebPackerPort}"
+echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
+echo -e "Add This to your development.rb file \n\
+
+config.action_mailer.default_url_options = { host: ENV.fetch('FRONT_END_HOST') { 'localhost' }, port: ENV.fetch('FRONT_END_PORT') { $RailsPort } } \n\
+config.action_mailer.delivery_method = :smtp \n\
+config.action_mailer.perform_deliveries = true \n\
+config.action_mailer.default charset: 'utf-8' \n\
+
+config.action_mailer.smtp_settings = { \n\
+  address: 'mailcatcher', \n\
+  port: 1025, \n\
+}"
+echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
