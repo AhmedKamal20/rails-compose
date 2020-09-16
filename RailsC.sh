@@ -118,8 +118,6 @@ $([[ $WebPackerEnabled = true ]] && echo "COPY package.json /usr/src/app/package
 $([[ $WebPackerEnabled = true ]] && echo "COPY yarn.lock /usr/src/app/yarn.lock")
 
 RUN bundle install
-# RUN gem install rails -v $RailsVersion
-
 $([[ $WebPackerEnabled = true ]] && echo "RUN yarn install")
 
 COPY entrypoint.sh /usr/bin/
@@ -134,7 +132,7 @@ ENDOFFILE
 log "Dockerfile Created"
 
 cat > ./docker-compose.yml << ENDOFFILE
-version: '2.0'
+version: '3'
 
 services:
 
@@ -208,6 +206,9 @@ rm -f tmp/pids/server.pid
 echo -e "Installing Ruby Dependencies"
 bundle check || bundle install
 
+rails log:clear
+rails tmp:clear
+
 $([[ $WebPackerEnabled = true ]] && echo "
 if [[ -d 'config/webpack' ]]; then
   echo 'Installing JS Dependencies'
@@ -220,6 +221,8 @@ fi")
 # Do the pending migrations.
 if psql -lqt | cut -d \| -f 1 | grep -qw app_development; then
   rails db:migrate
+elif [[ -f 'db/schema.rb' ]]; then
+  rails db:setup
 else
   rails db:create db:migrate db:seed
 fi
@@ -230,12 +233,18 @@ exec "\$@"
 ENDOFFILE
 log "Entrypoint Script Created"
 
+cat > ./Procfile << ENDOFFILE
+web: bundle exec puma -C config/puma.rb
+ENDOFFILE
+log "Procfile Created"
+
 cat > ./Gemfile << ENDOFFILE
 source 'https://rubygems.org'
 gem 'rails', '~> ${RailsVersion}'
 ENDOFFILE
 log "Gemfile Created"
 
+if [[ $WebPackerEnabled = true ]]; then
 cat > ./package.json << ENDOFFILE
 {
   "name": "${AppName}",
@@ -244,12 +253,15 @@ cat > ./package.json << ENDOFFILE
 }
 ENDOFFILE
 log "Package.json Created"
+fi
 
 touch ./Gemfile.lock
 log "Gemfile Lock Created"
 
+if [[ $WebPackerEnabled = true ]]; then
 touch ./yarn.lock
 log "Yarn Lock Created"
+fi
 
 # Start Building the Project
 
@@ -263,9 +275,6 @@ if [[ $TESTING == false ]]; then
 
   log "Changing the Owner to Current User"
   sudo chown -R $USER:$(id -gn $USER) .
-
-  # log "Rebuilding the docker images"
-  # docker-compose build
 
   log "Starting the docker services"
   docker-compose up -d
