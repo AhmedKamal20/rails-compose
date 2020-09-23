@@ -16,3 +16,6 @@
 
 ## Bundle Install
 * `docker-compose exec rails bundle install`
+
+## TODO
+* The `bundle install` in Dockerfile

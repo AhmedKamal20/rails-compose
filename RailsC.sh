@@ -36,10 +36,11 @@ DefaultOptions="--database=postgresql"
 RepoPath=$(readlink -f "${1}")
 AppName=$(basename "${RepoPath}")
 AppName=$(echo ${AppName// /-} | tr '[:upper:]' '[:lower:]')
-RailsPort="${2}30"
-WebPackerPort="${2}35"
-AdminerPort="${2}80"
-MailCatcherPort="${2}90"
+AppDomain="${2}"
+RailsPort="3000"
+WebPackerPort="3035"
+AdminerPort="8080"
+MailCatcherPort="1080"
 if [ -z "${3}" ]; then
   RailsOptions="${DefaultOptions}"
 else
@@ -136,63 +137,99 @@ version: '3'
 
 services:
 
-  rails:
+  reverse:
+    image: jwilder/nginx-proxy
+    container_name: "${AppName}-reverse"
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+  app:
     build: .
-    image: "${AppName}-rails"
-    hostname: "rails"
-    container_name: "${AppName}-rails"
+    image: "${AppName}-app"
+    hostname: "app"
+    domainname: "${AppDomain}"
+    container_name: "${AppName}-app"
     tty: true
     stdin_open: true
+    networks:
+      default:
+        aliases:
+          - "app.${AppDomain}"
     volumes:
       - ./:/usr/src/app
-      - ${AppName}-rails-bundler-dir:/usr/local/bundle
+      - ${AppName}-app-bundler-dir:/usr/local/bundle
     depends_on:
       - db
     ports:
-      - ${RailsPort}:${RailsPort}$([[ $WebPackerEnabled = true ]] && echo -e "\n      - ${WebPackerPort}:${WebPackerPort}")
+      - ${RailsPort}$([[ $WebPackerEnabled = true ]] && echo -e "\n      - ${WebPackerPort}:${WebPackerPort}")
     environment:
+      VIRTUAL_HOST: "app.${AppDomain}"
+      VIRTUAL_PORT: ${RailsPort}
       RAILS_ENV: "development"
       NODE_ENV: "development"
-      HOST: "localhost"
-      PORT: "${RailsPort}"
-      PGHOST: "db"
-      PGPORT: "5432"
+      HOST: "app.${AppDomain}"
+      PORT: ${RailsPort}
+      PGHOST: "db.${AppDomain}"
+      PGPORT: 5432
       PGUSER: "postgres"
       PGPASSWORD: "postgres"
 
   db:
     image: postgres:${PostgresVersion}-alpine
     hostname: "db"
+    domainname: "${AppDomain}"
     container_name: "${AppName}-db"
     restart: always
-    environment:
-      POSTGRES_USER: "postgres"
-      POSTGRES_PASSWORD: "postgres"
+    networks:
+      default:
+        aliases:
+          - "db.${AppDomain}"
     volumes:
       - ${AppName}-db-data:/var/lib/postgresql/data
       - ${AppName}-db-logs:/var/log/postgresql
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
 
   mailcatcher:
-    image: schickling/mailcatcher
+    image: schickling/mailcatcher:latest
     hostname: "mailcatcher"
+    domainname: "${AppDomain}"
     container_name: "${AppName}-mailcatcher"
+    networks:
+      default:
+        aliases:
+          - "mailcatcher.${AppDomain}"
     depends_on:
-      - rails
+      - app
     ports:
-      - ${MailCatcherPort}:1080
+      - ${MailCatcherPort}
+    environment:
+      VIRTUAL_HOST: "mailcatcher.${AppDomain}"
+      VIRTUAL_PORT: ${MailCatcherPort}
 
   adminer:
     image: adminer:latest
     restart: always
     hostname: "adminer"
+    domainname: "${AppDomain}"
     container_name: "${AppName}-adminer"
+    networks:
+      default:
+        aliases:
+          - "adminer.${AppDomain}"
     ports:
-      - ${AdminerPort}:8080
+      - ${AdminerPort}
+    environment:
+      VIRTUAL_HOST: "adminer.${AppDomain}"
 
 volumes:
   ${AppName}-db-data:
   ${AppName}-db-logs:
-  ${AppName}-rails-bundler-dir:
+  ${AppName}-app-bundler-dir:
 ENDOFFILE
 log "DockerCompose file Created"
 
@@ -271,7 +308,7 @@ if [[ $TESTING == false ]]; then
 
   log "Initializing the Rails App"
   log "rails new . ${RailsOptions}"
-  docker-compose run --rm --no-deps --entrypoint "" rails rails new . ${RailsOptions}
+  docker-compose run --rm --no-deps --entrypoint "" app rails new . ${RailsOptions}
 
   log "Changing the Owner to Current User"
   sudo chown -R $USER:$(id -gn $USER) .
@@ -302,15 +339,21 @@ echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "${RED}Done${NCO}"
 echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "Rails App Installed In ${RepoPath}"
-echo -e "Rails App Runs at http://localhost:${RailsPort}/"
-echo -e "Adminer Runs at http://localhost:${AdminerPort}/"
-echo -e "MailCatcher Runs at http://localhost:${MailCatcherPort}/"
+echo -e "Rails App Runs at http://app.${AppDomain}/"
+echo -e "Adminer Runs at http://adminer.${AppDomain}/"
+echo -e "MailCatcher Runs at http://mailcatcher.${AppDomain}/"
 echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
-echo -e "Change the webpacker port in config/webpacker.yml to ${WebPackerPort}"
+echo -e "Change the webpacker port in config/webpacker.yml file \n\
+
+host: app.${AppDomain} \n\
+port: ${WebPackerPort} \n\
+public: app.${AppDomain}:3035"
 echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "Add This to your development.rb file \n\
 
-config.action_mailer.default_url_options = { host: ENV.fetch('FRONT_END_HOST') { 'localhost' }, port: ENV.fetch('FRONT_END_PORT') { $RailsPort } } \n\
+config.hosts << 'app.${AppDomain}' \n\
+
+config.action_mailer.default_url_options = { host: ENV.fetch('FRONT_END_HOST') { 'app.${AppDomain}' }, port: ENV.fetch('FRONT_END_PORT') { $RailsPort } } \n\
 config.action_mailer.delivery_method = :smtp \n\
 config.action_mailer.perform_deliveries = true \n\
 config.action_mailer.default charset: 'utf-8' \n\
@@ -319,4 +362,10 @@ config.action_mailer.smtp_settings = { \n\
   address: 'mailcatcher', \n\
   port: 1025, \n\
 }"
+echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
+echo -e "Add This to your hosts file \n\
+
+127.0.0.1 app.${AppDomain} \n\
+127.0.0.1 mailcatcher.${AppDomain} \n\
+127.0.0.1 adminer.${AppDomain}"
 echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
