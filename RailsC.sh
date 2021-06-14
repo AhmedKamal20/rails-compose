@@ -2,9 +2,9 @@
 
 ############################################################################
 # Script Name  : RailsC
-# Description  : A CLI tool to help you start a new rails app fast
+# Description  : A CLI tool to help you start a new rails app with docker-compose fast
 # Version      : 1.0.0
-# Author       : AhmedKamal20
+# Author       : AhmedKamal20 ( Ahmed Kamal )
 # Email        : ahmed.kamal200@gmail.com
 # Dependencies : docker-compose readlink basename pushd popd read sudo sleep
 ############################################################################
@@ -13,9 +13,11 @@ set -e
 sudo -v
 
 TESTING=false
+ForceDisableWebPack=true
 
 RED='\e[1;31m'; GRE='\e[1;32m'; BLU='\e[1;34m'; YEL='\e[1;33m'; NCO='\e[0m';
 
+# Help Message
 if [ $# -lt 2 ]; then
   echo -e "\n${RED}No/Wrong arguments supplied${NCO}\n"
   echo -e "${YEL}RailsC${NCO} - A CLI tool to help you start a new rails app fast\n"
@@ -28,9 +30,9 @@ if [ $# -lt 2 ]; then
   exit 1
 fi
 
-RubyVersion="2.7.1"
-RailsVersion="6.0.3.3"
-PostgresVersion="12.4"
+RubyVersion="2.7.3"
+RailsVersion="6.1.3.2"
+PostgresVersion="13.3"
 DefaultOptions="--database=postgresql"
 
 RepoPath=$(readlink -f "${1}")
@@ -40,14 +42,16 @@ AppDomain="${2}"
 RailsPort="3000"
 WebPackerPort="3035"
 AdminerPort="8080"
+CommanderPort="8081"
 MailCatcherPort="1080"
+
 if [ -z "${3}" ]; then
   RailsOptions="${DefaultOptions}"
 else
   RailsOptions="${3}"
 fi
 
-if [[ ${RailsOptions} == *api* ]]; then
+if [[ ${RailsOptions} == *api* ]] || [[ ${ForceDisableWebPack} ]]; then
   WebPackerEnabled=false
 else
   WebPackerEnabled=true
@@ -57,11 +61,19 @@ function log {
   echo -e "${GRE}✔${NCO} $1"
 }
 
+function run {
+  echo -e "${RED}\$${NCO} $@"
+  if [[ $TESTING == false ]]; then
+    $@
+  fi
+}
+
 echo -e "${GRE}\n\nCreating New Rails App as follow:${NCO}"
 echo -e "${BLU}AppName:${NCO} ${AppName}"
 echo -e "${BLU}RepoPath:${NCO} ${RepoPath}"
 echo -e "${BLU}RailsPort:${NCO} ${RailsPort}"
 echo -e "${BLU}AdminerPort:${NCO} ${AdminerPort}"
+echo -e "${BLU}CommanderPort:${NCO} ${CommanderPort}"
 echo -e "${BLU}MailCatcherPort:${NCO} ${MailCatcherPort}"
 echo -e "${BLU}RailsOptions:${NCO} ${RailsOptions}"
 echo -e "${BLU}RubyVersion:${NCO} ${RubyVersion}"
@@ -98,6 +110,7 @@ cd "${RepoPath}"
 
 cat > ./Dockerfile << ENDOFFILE
 FROM ruby:${RubyVersion}
+#FROM rails:${RailsVersion}
 
 ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=DontWarn
 
@@ -108,6 +121,7 @@ RUN apt-get update -qq \\
     && apt-get install -y --no-install-recommends \\
     libpq-dev \\
     postgresql-client \\
+    poppler-utils \\
     nodejs \\
     yarn
 
@@ -118,8 +132,7 @@ COPY Gemfile.lock /usr/src/app/Gemfile.lock
 $([[ $WebPackerEnabled = true ]] && echo "COPY package.json /usr/src/app/package.json")
 $([[ $WebPackerEnabled = true ]] && echo "COPY yarn.lock /usr/src/app/yarn.lock")
 
-RUN bundle install
-$([[ $WebPackerEnabled = true ]] && echo "RUN yarn install")
+RUN gem install rails -v ${RailsVersion}
 
 COPY entrypoint.sh /usr/bin/
 RUN chmod +x /usr/bin/entrypoint.sh
@@ -179,10 +192,10 @@ services:
 
   db:
     image: postgres:${PostgresVersion}-alpine
+    restart: always
     hostname: "db"
     domainname: "${AppDomain}"
     container_name: "${AppName}-db"
-    restart: always
     networks:
       default:
         aliases:
@@ -225,6 +238,35 @@ services:
       - ${AdminerPort}
     environment:
       VIRTUAL_HOST: "adminer.${AppDomain}"
+
+  redis:
+    image: redis:alpine
+    restart: always
+    hostname: "redis"
+    domainname: "${AppDomain}"
+    container_name: "${AppName}-redis"
+    networks:
+      default:
+        aliases:
+          - "redis.${AppDomain}"
+
+  commander:
+    image: rediscommander/redis-commander:latest
+    restart: always
+    hostname: "commander"
+    domainname: "${AppDomain}"
+    container_name: "${AppName}-commander"
+    networks:
+      default:
+        aliases:
+          - "commander.${AppDomain}"
+    depends_on:
+      - redis
+    ports:
+      - ${CommanderPort}
+    environment:
+      VIRTUAL_HOST: "commander.${AppDomain}"
+      REDIS_HOSTS: local:redis:6379,local:redis:6379:15
 
 volumes:
   ${AppName}-db-data:
@@ -302,20 +344,20 @@ fi
 
 # Start Building the Project
 
+log "Building the docker images"
+run "docker-compose build"
+
+log "Initializing the Rails App"
+log "rails new . ${RailsOptions}"
+run "docker-compose run --rm --no-deps --entrypoint '' app rails new . ${RailsOptions}"
+
+log "Changing the Owner to Current User"
+run "sudo chown -R $USER:$(id -gn $USER) ."
+
+log "Starting the docker services"
+run "docker-compose up -d"
+
 if [[ $TESTING == false ]]; then
-  log "Building the docker images"
-  docker-compose build
-
-  log "Initializing the Rails App"
-  log "rails new . ${RailsOptions}"
-  docker-compose run --rm --no-deps --entrypoint "" app rails new . ${RailsOptions}
-
-  log "Changing the Owner to Current User"
-  sudo chown -R $USER:$(id -gn $USER) .
-
-  log "Starting the docker services"
-  docker-compose up -d
-
   log "Wating For Webpacker"
   spinner="/|\\-/|\\-"
   while [ ! -f db/schema.rb ]; do
@@ -326,14 +368,14 @@ if [[ $TESTING == false ]]; then
       sleep 0.5
     done
   done
-
-  log "Changing the Owner to Current User"
-  sudo chown -R $USER:$(id -gn $USER) .
-
-  log "Creating an Initial commit"
-  git add .
-  git commit -m "Initial commit"
 fi
+
+log "Changing the Owner to Current User"
+run "sudo chown -R $USER:$(id -gn $USER) ."
+
+log "Creating an Initial commit"
+run "git add ."
+run "git commit -m 'Initial commit'"
 
 echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "${RED}Done${NCO}"
@@ -341,6 +383,7 @@ echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "Rails App Installed In ${RepoPath}"
 echo -e "Rails App Runs at http://app.${AppDomain}/"
 echo -e "Adminer Runs at http://adminer.${AppDomain}/"
+echo -e "Commander Runs at http://commander.${AppDomain}/"
 echo -e "MailCatcher Runs at http://mailcatcher.${AppDomain}/"
 echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "Change the webpacker port in config/webpacker.yml file \n\
@@ -352,6 +395,7 @@ echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "Add This to your development.rb file \n\
 
 config.hosts << 'app.${AppDomain}' \n\
+config.web_console.permissions = '172.0.0.0/0' \n\
 
 config.action_mailer.default_url_options = { host: ENV.fetch('FRONT_END_HOST') { 'app.${AppDomain}' }, port: ENV.fetch('FRONT_END_PORT') { $RailsPort } } \n\
 config.action_mailer.delivery_method = :smtp \n\
@@ -367,5 +411,6 @@ echo -e "Add This to your hosts file \n\
 
 127.0.0.1 app.${AppDomain} \n\
 127.0.0.1 mailcatcher.${AppDomain} \n\
+127.0.0.1 commander.${AppDomain} \n\
 127.0.0.1 adminer.${AppDomain}"
 echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
