@@ -12,7 +12,7 @@
 set -e
 sudo -v
 
-TESTING=true
+TESTING=false
 RED='\e[1;31m'; GRE='\e[1;32m'; BLU='\e[1;34m'; YEL='\e[1;33m'; NCO='\e[0m';
 
 # Help Message
@@ -60,7 +60,7 @@ function log {
 }
 
 function run {
-  echo -e "${RED}\$${NCO} $@"
+  echo -e "${RED}\$${NCO} $*"
   if [[ $TESTING == false ]]; then
     "$@"
   fi
@@ -80,16 +80,16 @@ function overwrite_railsc {
   run pushd "${RepoPath}"
   run docker-compose down -v
   run popd
-  read -p "Are you sure you want to remove ${RepoPath}? [YyNn] " yn
+  read -p -r "Are you sure you want to remove ${RepoPath}? [YyNn] " yn
   case $yn in
-    [Yy]* ) run sudo rm -rf ${RepoPath};;
+    [Yy]* ) run sudo rm -rf "${RepoPath}";;
     [Nn]* ) exit;;
     * ) echo "Please answer [YyNn]"; exit;;
   esac
 }
 
 if [[ -d ${RepoPath} && $TESTING == false ]]; then
-  read -p "The Path is Existed Already, Do you wish to overwrite it? [YyNn] " yn
+  read -p -r "The Path is Existed Already, Do you wish to overwrite it? [YyNn] " yn
   case $yn in
     [Yy]* ) overwrite_railsc;;
     [Nn]* ) exit;;
@@ -332,7 +332,7 @@ run docker-compose run --rm --no-deps --entrypoint '' app bash -c "gem install r
 run docker-compose down
 
 log "Changing the owner to current user"
-run sudo chown -R $USER:$(id -gn $USER) .
+run sudo chown -R "$USER":"$(id -gn "$USER")" .
 
 log "Starting the docker services"
 run docker-compose up -d
@@ -341,7 +341,7 @@ if [[ $TESTING == false ]]; then
   log "Wating For Rails to be UP"
   spinner="/|\\-/|\\-"
   while [ ! -f db/schema.rb ]; do
-    for i in `seq 0 7`
+    for i in $(seq 0 7)
     do
       echo -n "${spinner:$i:1}"
       echo -en "\010"
@@ -351,7 +351,7 @@ if [[ $TESTING == false ]]; then
 fi
 
 log "Changing the owner to current user"
-run sudo chown -R $USER:$(id -gn $USER) .
+run sudo chown -R "$USER":"$(id -gn "$USER")" .
 
 log "Creating an Initial commit"
 run git add .
