@@ -12,16 +12,16 @@
 set -e
 sudo -v
 
-TESTING=false
+TESTING=true
 RED='\e[1;31m'; GRE='\e[1;32m'; BLU='\e[1;34m'; YEL='\e[1;33m'; NCO='\e[0m';
 
 # Help Message
-if [ $# -lt 2 ]; then
+if [ $# -lt 1 ]; then
   echo -e "\n${RED}No/Wrong arguments supplied${NCO}\n"
   echo -e "${YEL}RailsC${NCO} - A CLI tool to help you start a new rails app fast\n"
   echo -e "${GRE}Format:${NCO} RailsC <PATH> <LOCAL DOMAIN> [<RAILS OPTIONS>]\n"
   echo -e "${BLU}PATH:${NCO} The desired folder name for the Rails app"
-  echo -e "${BLU}LOCAL DOMAIN:${NCO} Domain to use with Nginx reverse proxy"
+  echo -e "${BLU}LOCAL DOMAIN:${NCO} Domain to use with Nginx reverse proxy, Default is <AppName>.io"
   echo -e "${BLU}RAILS OPTIONS:${NCO} Options to use for Rails new Apps, Default is --database=postgresql\n"
   echo -e "${YEL}e.g.${NCO} RailsC ~/apps/myApp example.com \"--force --database=postgresql\"\n"
 
@@ -36,7 +36,12 @@ ForceDisableNode=false
 
 RepoPath=$(readlink -f "${1}")
 AppName=$(basename "${RepoPath}" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
-AppDomain="${2}"
+
+if [ -z "${2}" ]; then
+  AppDomain=$(echo "${AppName}" | tr '.' '-' | awk '{print $1".io"}')
+else
+  AppDomain="${2}"
+fi
 
 if [ -z "${3}" ]; then
   RailsOptions="${DefaultOptions}"
@@ -72,9 +77,9 @@ echo -e "${BLU}NodeEnabled?:${NCO} ${NodeEnabled}"
 echo -e "${RED}Starting...${NCO}"
 
 function overwrite_railsc {
-  pushd "${RepoPath}"
+  run pushd "${RepoPath}"
   run docker-compose down -v
-  popd
+  run popd
   read -p "Are you sure you want to remove ${RepoPath}? [YyNn] " yn
   case $yn in
     [Yy]* ) run sudo rm -rf ${RepoPath};;

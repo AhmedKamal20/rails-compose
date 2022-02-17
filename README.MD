@@ -1,6 +1,17 @@
+# Rails compose
+A script to fastly bootstrap a docker/docker-compose environment for rails application.
+
 ## Usage
-* `RailsC.sh PATH PORT_PREFIX RAILS_OPTIONS`
-* `RailsC.sh ~/path/to/app 30 "--force --database=postgresql"`
+* `RailsC <PATH> [<LOCAL DOMAIN>] [<RAILS OPTIONS>]`
+  ```
+  PATH: The desired folder name for the Rails app
+  LOCAL DOMAIN: Domain to use with Nginx reverse proxy, Default is App name
+  RAILS OPTIONS: Options to use for Rails new Apps, Default is --database=postgresql
+  ```
+## Examples
+* `RailsC.sh ~/path/to/app example.io "--force --database=postgresql"`
+* `RailsC.sh ./myApp example.io`
+* `RailsC.sh exampleApp`
 
 ## Logs
 * `docker-compose logs -f`
@@ -12,10 +23,10 @@
 * `cat app_development.sql | docker exec -i db psql -U postgres -d app_development`
 
 ## To Migrate
-* `docker-compose exec rails rails db:migrate`
+* `docker-compose exec app rails db:migrate`
 
 ## Bundle Install
-* `docker-compose exec rails bundle install`
+* `docker-compose exec app bundle install`
 
 ## TODO
-* The `bundle install` in Dockerfile
+* Add Rails template
