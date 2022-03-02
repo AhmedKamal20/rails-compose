@@ -28,9 +28,10 @@ if [ $# -lt 1 ]; then
   exit 1
 fi
 
-RubyVersion="3.1.0"
+RubyVersion="3.1.1"
 RailsVersion="7.0.2.2"
 PostgresVersion="14.2"
+NodeVersion="16"
 DefaultOptions="--database=postgresql"
 ForceDisableNode=false
 
@@ -107,7 +108,7 @@ FROM ruby:${RubyVersion}
 
 ENV APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=DontWarn
 
-RUN curl -sL https://deb.nodesource.com/setup_16.x | bash -
+RUN curl -sL https://deb.nodesource.com/setup_${NodeVersion}.x | bash -
 RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \\
     && echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
 RUN apt-get update -qq \\
