@@ -81,7 +81,7 @@ function overwrite_railsc {
   run pushd "${RepoPath}"
   run docker-compose down -v
   run popd
-  read -p -r "Are you sure you want to remove ${RepoPath}? [YyNn] " yn
+  read -p "Are you sure you want to remove ${RepoPath}? [YyNn] " yn
   case $yn in
     [Yy]* ) run sudo rm -rf "${RepoPath}";;
     [Nn]* ) exit;;
@@ -90,7 +90,7 @@ function overwrite_railsc {
 }
 
 if [[ -d ${RepoPath} && $TESTING == false ]]; then
-  read -p -r "The Path is Existed Already, Do you wish to overwrite it? [YyNn] " yn
+  read -p "The Path is Existed Already, Do you wish to overwrite it? [YyNn] " yn
   case $yn in
     [Yy]* ) overwrite_railsc;;
     [Nn]* ) exit;;
