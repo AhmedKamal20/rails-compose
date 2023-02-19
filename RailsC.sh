@@ -29,9 +29,9 @@ if [ $# -lt 1 ]; then
   exit 1
 fi
 
-RubyVersion="3.1.2" # https://www.ruby-lang.org/en/downloads/
-RailsVersion="7.0.3.1" # https://rubygems.org/gems/rails/versions
-PostgresVersion="14.5" # https://www.postgresql.org/docs/release/
+RubyVersion="3.2.1" # https://www.ruby-lang.org/en/downloads/
+RailsVersion="7.0.4.2" # https://rubygems.org/gems/rails/versions
+PostgresVersion="14.7" # https://www.postgresql.org/docs/release/
 NodeVersion="16" # https://nodejs.org/en/about/releases/
 DefaultOptions="--database=postgresql --skip-test --skip-system-test --skip-bootsnap -m ./template.rb"
 ScriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -178,10 +178,10 @@ services:
       VIRTUAL_HOST: "app.${AppDomain}"
       RAILS_ENV: "development"
       NODE_ENV: "development"
-      YARN_CACHE_FOLDER: "/usr/src/yarn"
+      $([[ $NodeEnabled = true ]] && echo "YARN_CACHE_FOLDER: '/usr/src/yarn'")
       HOST: "app.${AppDomain}"
       PORT: "3000"
-      PGHOST: "db.${AppDomain}"
+      PGHOST: "db"
       PGPORT: "5432"
       PGUSER: "postgres"
       PGPASSWORD: "postgres"
@@ -210,10 +210,10 @@ services:
       VIRTUAL_HOST: "sidekiq.${AppDomain}"
       RAILS_ENV: "development"
       NODE_ENV: "development"
-      YARN_CACHE_FOLDER: "/usr/src/yarn"
+      $([[ $NodeEnabled = true ]] && echo "YARN_CACHE_FOLDER: '/usr/src/yarn'")
       HOST: "app.${AppDomain}"
       PORT: "3000"
-      PGHOST: "db.${AppDomain}"
+      PGHOST: "db"
       PGPORT: "5432"
       PGUSER: "postgres"
       PGPASSWORD: "postgres"
