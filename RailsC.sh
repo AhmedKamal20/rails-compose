@@ -13,6 +13,7 @@ set -e
 sudo -v
 
 TESTING=false
+ForceDisableNode=true
 RED='\e[1;31m'; GRE='\e[1;32m'; BLU='\e[1;34m'; YEL='\e[1;33m'; NCO='\e[0m';
 
 # Help Message
@@ -28,13 +29,12 @@ if [ $# -lt 1 ]; then
   exit 1
 fi
 
-RubyVersion="3.1.1"
-RailsVersion="7.0.2.2"
-PostgresVersion="14.2"
-NodeVersion="16"
-DefaultOptions="--database=postgresql"
-ForceDisableNode=false
-
+RubyVersion="3.1.2" # https://www.ruby-lang.org/en/downloads/
+RailsVersion="7.0.3.1" # https://rubygems.org/gems/rails/versions
+PostgresVersion="14.5" # https://www.postgresql.org/docs/release/
+NodeVersion="16" # https://nodejs.org/en/about/releases/
+DefaultOptions="--database=postgresql --skip-test --skip-system-test --skip-bootsnap -m ./template.rb"
+ScriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 RepoPath=$(readlink -f "${1}")
 AppName=$(basename "${RepoPath}" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
 
@@ -60,6 +60,11 @@ function log {
   echo -e "${GRE}✔${NCO} $1"
 }
 
+function f_run {
+  echo -e "${RED}\$${NCO} $*"
+  "$@"
+}
+
 function run {
   echo -e "${RED}\$${NCO} $*"
   if [[ $TESTING == false ]]; then
@@ -79,7 +84,9 @@ echo -e "${RED}Starting...${NCO}"
 
 function overwrite_railsc {
   run pushd "${RepoPath}"
-  run docker-compose down -v
+  run docker-compose run --rm --entrypoint '' app rails db:drop
+  run docker-compose down
+  # run docker-compose down -v
   run popd
   read -p "Are you sure you want to remove ${RepoPath}? [YyNn] " yn
   case $yn in
@@ -98,8 +105,8 @@ if [[ -d ${RepoPath} && $TESTING == false ]]; then
   esac
 fi
 
-run mkdir -p "${RepoPath}"
-run cd "${RepoPath}"
+f_run mkdir -p "${RepoPath}"
+f_run cd "${RepoPath}"
 
 # Creating Initial Files
 
@@ -121,7 +128,10 @@ RUN apt-get update -qq \\
 
 WORKDIR /usr/src/app
 
-COPY entrypoint.sh /usr/bin/
+RUN gem update --system
+RUN gem update bundler
+
+COPY entrypoint.dev.sh /usr/bin/entrypoint.sh
 RUN chmod +x /usr/bin/entrypoint.sh
 ENTRYPOINT ["entrypoint.sh"]
 
@@ -135,7 +145,7 @@ cat > ./docker-compose.yml << ENDOFFILE
 services:
 
   reverse:
-    image: jwilder/nginx-proxy
+    image: "jwilder/nginx-proxy"
     container_name: "${AppName}-reverse"
     ports:
       - 80:80
@@ -160,21 +170,22 @@ services:
     volumes:
       - ./:/usr/src/app
       - ${AppName}-app-bundler-dir:/usr/local/bundle
-      - ${AppName}-app-node-modules-dir:/usr/src/app/node_modules:delegated
-      - ${AppName}-app-yarn-cache-dir:/usr/src/yarn:delegated
+      $([[ $NodeEnabled = true ]] && echo "- ${AppName}-app-node-modules-dir:/usr/src/app/node_modules:delegated")
+      $([[ $NodeEnabled = true ]] && echo "- ${AppName}-app-yarn-cache-dir:/usr/src/yarn:delegated")
     depends_on:
-      - db
+      - "db"
     environment:
       VIRTUAL_HOST: "app.${AppDomain}"
       RAILS_ENV: "development"
       NODE_ENV: "development"
       YARN_CACHE_FOLDER: "/usr/src/yarn"
       HOST: "app.${AppDomain}"
-      PORT: 3000
+      PORT: "3000"
       PGHOST: "db.${AppDomain}"
-      PGPORT: 5432
+      PGPORT: "5432"
       PGUSER: "postgres"
       PGPASSWORD: "postgres"
+      REDIS_URL: "redis://redis:6379/1"
 
   sidekiq:
     image: "${AppName}-app"
@@ -188,12 +199,12 @@ services:
     volumes:
       - ./:/usr/src/app
       - ${AppName}-app-bundler-dir:/usr/local/bundle
-      - ${AppName}-app-node-modules-dir:/usr/src/app/node_modules:delegated
-      - ${AppName}-app-yarn-cache-dir:/usr/src/yarn:delegated
+      $([[ $NodeEnabled = true ]] && echo "- ${AppName}-app-node-modules-dir:/usr/src/app/node_modules:delegated")
+      $([[ $NodeEnabled = true ]] && echo "- ${AppName}-app-yarn-cache-dir:/usr/src/yarn:delegated")
     depends_on:
-      - app
-      - redis
-    command: bundle exec sidekiq -C config/sidekiq.yml
+      - "app"
+      - "redis"
+    command: "bundle exec sidekiq"
     entrypoint: ''
     environment:
       VIRTUAL_HOST: "sidekiq.${AppDomain}"
@@ -201,14 +212,15 @@ services:
       NODE_ENV: "development"
       YARN_CACHE_FOLDER: "/usr/src/yarn"
       HOST: "app.${AppDomain}"
-      PORT: 3000
+      PORT: "3000"
       PGHOST: "db.${AppDomain}"
-      PGPORT: 5432
+      PGPORT: "5432"
       PGUSER: "postgres"
       PGPASSWORD: "postgres"
+      REDIS_URL: "redis://redis:6379/1"
 
   mailcatcher:
-    image: schickling/mailcatcher:latest
+    image: "schickling/mailcatcher:latest"
     hostname: "mailcatcher"
     domainname: "${AppDomain}"
     container_name: "${AppName}-mailcatcher"
@@ -217,17 +229,17 @@ services:
         aliases:
           - "mailcatcher.${AppDomain}"
     depends_on:
-      - app
+      - "app"
     environment:
       VIRTUAL_HOST: "mailcatcher.${AppDomain}"
-      VIRTUAL_PORT: 1080
+      VIRTUAL_PORT: "1080"
 
   db:
-    image: postgres:${PostgresVersion}-alpine
+    image: "postgres:${PostgresVersion}-alpine"
     hostname: "db"
     domainname: "${AppDomain}"
     container_name: "${AppName}-db"
-    restart: always
+    restart: "always"
     networks:
       default:
         aliases:
@@ -240,57 +252,57 @@ services:
       POSTGRES_PASSWORD: "postgres"
 
   adminer:
-    image: adminer:latest
+    image: "adminer:latest"
     hostname: "adminer"
     domainname: "${AppDomain}"
     container_name: "${AppName}-adminer"
-    restart: always
+    restart: "always"
     networks:
       default:
         aliases:
           - "adminer.${AppDomain}"
     depends_on:
-      - db
+      - "db"
     environment:
       VIRTUAL_HOST: "adminer.${AppDomain}"
 
   redis:
-    image: redis:alpine
+    image: "redis:alpine"
     hostname: "redis"
     domainname: "${AppDomain}"
     container_name: "${AppName}-redis"
-    restart: always
+    restart: "always"
     networks:
       default:
         aliases:
           - "redis.${AppDomain}"
 
   commander:
-    image: rediscommander/redis-commander:latest
+    image: "rediscommander/redis-commander:latest"
     hostname: "commander"
     domainname: "${AppDomain}"
     container_name: "${AppName}-commander"
-    restart: always
+    restart: "always"
     networks:
       default:
         aliases:
           - "commander.${AppDomain}"
     depends_on:
-      - redis
+      - "redis"
     environment:
       VIRTUAL_HOST: "commander.${AppDomain}"
-      REDIS_HOSTS: local:redis:6379,local:redis:6379:15
+      REDIS_HOSTS: "local:redis:6379,local:redis:6379:15"
 
 volumes:
   ${AppName}-db-data:
   ${AppName}-db-logs:
   ${AppName}-app-bundler-dir:
-  ${AppName}-app-node-modules-dir:
-  ${AppName}-app-yarn-cache-dir:
+  $([[ $NodeEnabled = true ]] && echo "${AppName}-app-node-modules-dir:")
+  $([[ $NodeEnabled = true ]] && echo "${AppName}-app-yarn-cache-dir:")
 ENDOFFILE
 log "DockerCompose file Created"
 
-cat > ./entrypoint.sh << ENDOFFILE
+cat > ./entrypoint.dev.sh << ENDOFFILE
 #!/bin/bash
 set -e
 
@@ -322,6 +334,9 @@ exec "\$@"
 ENDOFFILE
 log "Entrypoint Script Created"
 
+log "Coping the template files to the app directory"
+cp ${ScriptDir}/template.rb ${RepoPath}/template.rb
+
 # Start Building the Project
 
 log "Building the docker images"
@@ -329,7 +344,7 @@ run docker-compose build
 
 log "Initializing the Rails App"
 log "rails new . ${RailsOptions}"
-run docker-compose run --rm --no-deps --entrypoint '' app bash -c "gem install rails -v ${RailsVersion} && rails new . ${RailsOptions}"
+run docker-compose run --rm --entrypoint '' app bash -c "gem install rails -v ${RailsVersion} && rails new . ${RailsOptions}"
 run docker-compose down
 
 log "Changing the owner to current user"
@@ -354,9 +369,9 @@ fi
 log "Changing the owner to current user"
 run sudo chown -R "$USER":"$(id -gn "$USER")" .
 
-log "Creating an Initial commit"
-run git add .
-run git commit -m 'Initial commit'
+# log "Creating an Initial commit"
+# run git add .
+# run git commit -m 'Initial commit'
 
 echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "${RED}Done${NCO}"
@@ -366,23 +381,6 @@ echo -e "Rails App Runs at http://app.${AppDomain}/"
 echo -e "Adminer Runs at http://adminer.${AppDomain}/"
 echo -e "Commander Runs at http://commander.${AppDomain}/"
 echo -e "MailCatcher Runs at http://mailcatcher.${AppDomain}/"
-echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
-echo -e "Add This to your development.rb file \n\
-
-config.hosts << ENV.fetch('HOST') { 'app.${AppDomain}' } \n\
-config.web_console.permissions = '172.0.0.0/0' \n\
-
-config.action_mailer.default_url_options = { host: ENV.fetch('HOST') { 'app.${AppDomain}' }, port: ENV.fetch('PORT') { 3000 } } \n\
-config.action_mailer.delivery_method = :smtp \n\
-config.action_mailer.perform_deliveries = true \n\
-config.action_mailer.default charset: 'utf-8' \n\
-
-config.action_mailer.smtp_settings = { \n\
-  address: 'mailcatcher', \n\
-  port: 1025, \n\
-}"
-echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
-echo -e "Add (-b 0.0.0.0) to the web command in the Procfile"
 echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "Add This to your hosts file \n\
 
