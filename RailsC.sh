@@ -29,12 +29,12 @@ if [ $# -lt 1 ]; then
   exit 1
 fi
 
-RubyVersion="3.2.1" # https://www.ruby-lang.org/en/downloads/
-RailsVersion="7.0.4.2" # https://rubygems.org/gems/rails/versions
-PostgresVersion="14.7" # https://www.postgresql.org/docs/release/
+RubyVersion="3.2.2" # https://www.ruby-lang.org/en/downloads/
+RailsVersion="7.0.6" # https://rubygems.org/gems/rails/versions
+PostgresVersion="14.8" # https://www.postgresql.org/docs/release/
 NodeVersion="16" # https://nodejs.org/en/about/releases/
 DefaultOptions="--database=postgresql --skip-test --skip-system-test --skip-bootsnap -m ./template.rb"
-ScriptDir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+ScriptDir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 RepoPath=$(readlink -f "${1}")
 AppName=$(basename "${RepoPath}" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
 
