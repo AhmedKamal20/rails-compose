@@ -2,18 +2,18 @@
 
 ############################################################################
 # Script Name  : RailsC
-# Description  : A CLI tool to help you start a new rails app with docker-compose fast
+# Description  : A CLI tool to help you start a new rails app with docker compose fast
 # Version      : 1.1.0
 # Author       : AhmedKamal20 ( Ahmed Kamal )
 # Email        : ahmed.kamal200@gmail.com
-# Dependencies : docker-compose readlink basename pushd popd read sudo sleep
+# Dependencies : docker compose readlink basename pushd popd read sudo sleep
 ############################################################################
 
 set -e
 sudo -v
 
 TESTING=false
-ForceDisableNode=true
+ForceDisableNode=false
 RED='\e[1;31m'; GRE='\e[1;32m'; BLU='\e[1;34m'; YEL='\e[1;33m'; NCO='\e[0m';
 
 # Help Message
@@ -30,10 +30,10 @@ if [ $# -lt 1 ]; then
 fi
 
 RubyVersion="3.2.2" # https://www.ruby-lang.org/en/downloads/
-RailsVersion="7.0.6" # https://rubygems.org/gems/rails/versions
-PostgresVersion="14.8" # https://www.postgresql.org/docs/release/
-NodeVersion="16" # https://nodejs.org/en/about/releases/
-DefaultOptions="--database=postgresql --skip-test --skip-system-test --skip-bootsnap -m ./template.rb"
+RailsVersion="7.1.1" # https://rubygems.org/gems/rails/versions
+PostgresVersion="14.9" # https://www.postgresql.org/docs/release/
+NodeVersion="20" # https://nodejs.org/en/about/releases/
+DefaultOptions="--database=postgresql --skip-test --skip-system-test --skip-jbuilder -j esbuild -c tailwind"
 ScriptDir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 RepoPath=$(readlink -f "${1}")
 AppName=$(basename "${RepoPath}" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
@@ -84,9 +84,8 @@ echo -e "${RED}Starting...${NCO}"
 
 function overwrite_railsc {
   run pushd "${RepoPath}"
-  run docker-compose run --rm --entrypoint '' app rails db:drop
-  run docker-compose down
-  # run docker-compose down -v
+  run docker compose run --rm --entrypoint '' app rails db:drop
+  run docker compose down
   run popd
   read -p "Are you sure you want to remove ${RepoPath}? [YyNn] " yn
   case $yn in
@@ -145,7 +144,7 @@ cat > ./docker-compose.yml << ENDOFFILE
 services:
 
   reverse:
-    image: "jwilder/nginx-proxy"
+    image: "nginxproxy/nginx-proxy"
     container_name: "${AppName}-reverse"
     ports:
       - 80:80
@@ -340,18 +339,18 @@ cp ${ScriptDir}/template.rb ${RepoPath}/template.rb
 # Start Building the Project
 
 log "Building the docker images"
-run docker-compose build
+run docker compose build
 
 log "Initializing the Rails App"
 log "rails new . ${RailsOptions}"
-run docker-compose run --rm --entrypoint '' app bash -c "gem install rails -v ${RailsVersion} && rails new . ${RailsOptions}"
-run docker-compose down
+run docker compose run --rm --entrypoint '' app bash -c "gem install rails -v ${RailsVersion} && rails new . ${RailsOptions}"
+run docker compose down
 
 log "Changing the owner to current user"
 run sudo chown -R "$USER":"$(id -gn "$USER")" .
 
 log "Starting the docker services"
-run docker-compose up -d
+run docker compose up -d
 
 if [[ $TESTING == false ]]; then
   log "Wating For Rails to be UP"
@@ -370,8 +369,9 @@ log "Changing the owner to current user"
 run sudo chown -R "$USER":"$(id -gn "$USER")" .
 
 # log "Creating an Initial commit"
-# run git add .
-# run git commit -m 'Initial commit'
+run git commit --allow-empty -m '[ROOT] Initial commit'
+run git add .
+run git commit -m '[GENERATED] rails new'
 
 echo -e "${RED}=-=-==-=-=-=-=-=-=-=${NCO}"
 echo -e "${RED}Done${NCO}"
